@@ -1,0 +1,98 @@
+library(jsonlite)
+library(tidyverse)
+
+#creates a vector of scientific names which include common
+#data cleanliness issues that may cause issues with the database query
+
+namesToMatch <- c("Abietinaria inconstans", "Acanthochitona achates",
+                  "Acanthochitona rubrolineata", "Acanthochitona",
+                  "Acanthodesia perambulata", "Acervulina inhaerens",
+                  "Achnanthes", "Achnathes longipes",
+                  "Aciditerrimonas", "Acinetobacter",
+                  "Acinetopbacter", "Acrochaetium microscopicum",
+                  "Acrochaetium pacificum", "Acrosiphonia arcta",
+                  "Aequipecten heliacus") 
+
+
+#creates a JSON URL of the format required by World Register of Marine Species (WoRMS)
+#when doing a fuzzy name query which also searches non-marine records
+
+generateURL <- function(.sciName = "boops boops") {
+  
+  fuzzySearchQuery <- "http://www.marinespecies.org/rest/AphiaRecordsByMatchNames?scientificnames%5B%5D="
+  
+  marineRestrict <- "&marine_only=false"
+  
+  
+  URL <- paste0(fuzzySearchQuery, .sciName, marineRestrict)
+  
+  cleanURL <- map_chr(URL, ~ str_replace_all(., " ", "%20")) #replaces spaces with worms formatting
+  
+  
+  return(cleanURL)
+  
+}
+
+
+#pulls and converts the raw JSON data to a tidy dataframe
+
+dfFromJSON <- function(.inputURL) {
+    
+    rawJSON <- fromJSON(.inputURL)
+    
+    flatJSON <- flatten(rawJSON)
+    
+    dfJSON <- map_df(flatJSON, ~ rbind(.))
+    
+    
+    return(dfJSON)
+}
+
+
+#creates a blank dataframe with the same column names as 
+#the iteration of the WoRMS database you are pulling from
+
+exampleURL <- generateURL("boops boops") #the record for Boops boops will always be in the database
+
+exampleDF <- dfFromJSON(exampleURL) #pulls the record for Boops boops
+
+empty <- map_df(exampleDF, ~ NA) #replaces all info with NA
+
+
+#pull the record for the desired scientific name and all synonyms/similars
+pullRecordWORMS <- function(.sciName = "boops boops") {
+  
+  URL <- generateURL(.sciName)
+  
+  textName <- .sciName
+  
+  #handles errors produced when the record does not exist in worms
+  
+  record <- tryCatch(dfFromJSON(URL), 
+                     error = function(.sciName) { transform(empty, scientificname = textName) } #inserts sci name of missing
+                     )
+
+}
+
+
+#bulk pulls records based on character vector of inputs
+fuzzyNamePull <- function(.sciNames = c("boops boops", "mytilus galloprovincialis")) {
+  
+  finalDF <- pullRecordWORMS(.sciNames[[1]])
+  
+  for (i in .sciNames[2:length(.sciNames)]) {
+    newRow <- pullRecordWORMS(i)
+    finalDF <- rbind(finalDF, newRow)
+  }
+  
+  return(finalDF)
+  
+}
+
+
+#runs the function to do a fuzzy name search for all strings in vector
+worms <- fuzzyNamePull(namesToMatch)
+
+
+#output the result to a csv file for later use
+write.csv(worms, "Taxa-traits/worms.csv")
