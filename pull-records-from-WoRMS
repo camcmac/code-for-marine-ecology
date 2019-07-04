@@ -35,14 +35,17 @@ generateURL <- function(.sciName = "boops boops") {
 
 
 #pulls and converts the raw JSON data to a tidy dataframe
+#based on a search URL and scientific name
 
-dfFromJSON <- function(.inputURL) {
+dfFromJSON <- function(.inputURL, .sciName) {
     
-    rawJSON <- fromJSON(.inputURL)
+    rawJSON <- fromJSON(.inputURL) #pull info
     
-    flatJSON <- flatten(rawJSON)
+    flatJSON <- flatten(rawJSON) #convert from list of lists to a dataframe
     
-    dfJSON <- map_df(flatJSON, ~ rbind(.))
+    dfJSON <- map_df(flatJSON, ~ rbind(.)) #properly format the dataframe
+    
+    dfJSON <- transform(dfJSON, searchterm = .sciName) #add the sci name search term (for binding to original data)
     
     
     return(dfJSON)
@@ -54,7 +57,7 @@ dfFromJSON <- function(.inputURL) {
 
 exampleURL <- generateURL("boops boops") #the record for Boops boops will always be in the database
 
-exampleDF <- dfFromJSON(exampleURL) #pulls the record for Boops boops
+exampleDF <- dfFromJSON(exampleURL, .sciName = "boops boops") #pulls the record for Boops boops
 
 empty <- map_df(exampleDF, ~ NA) #replaces all info with NA
 
@@ -68,15 +71,15 @@ pullRecordWORMS <- function(.sciName = "boops boops") {
   
   #handles errors produced when the record does not exist in worms
   
-  record <- tryCatch(dfFromJSON(URL), 
-                     error = function(.sciName) { transform(empty, scientificname = textName) } #inserts sci name of missing
+  record <- tryCatch(dfFromJSON(URL, .sciName), 
+                     error = function(.sciName) { transform(empty, searchterm = textName) } #inserts sci name of missing
                      )
 
 }
 
 
 #bulk pulls records based on character vector of inputs
-fuzzyNamePull <- function(.sciNames = c("boops boops", "mytilus galloprovincialis")) {
+fuzzyNamePull <- function(.sciNames = c("boops boops", "mytilus galloprovincialis", "weriouwer")) {
   
   finalDF <- pullRecordWORMS(.sciNames[[1]])
   
@@ -91,8 +94,8 @@ fuzzyNamePull <- function(.sciNames = c("boops boops", "mytilus galloprovinciali
 
 
 #runs the function to do a fuzzy name search for all strings in vector
-worms <- fuzzyNamePull(namesToMatch)
+worms.all <- fuzzyNamePull(namesToMatch)
 
 
 #output the result to a csv file for later use
-write.csv(worms, "Taxa-traits/worms.csv")
+write.csv(worms.all, "Taxa-traits/worms-all.csv")
